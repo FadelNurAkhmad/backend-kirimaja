@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { RoleResponse } from '../auth/response/auth-login.response';
@@ -32,11 +32,59 @@ export class RolesService {
         });
     }
 
-    findOne(id: number) {
-        return `This action returns a #${id} role`;
+    async findOne(id: number): Promise<RoleResponse> {
+        const role = await this.prismaService.role.findUnique({
+            where: { id },
+            include: {
+                rolePermissions: {
+                    include: {
+                        permission: true,
+                    },
+                },
+            },
+        });
+
+        if (!role) {
+            throw new NotFoundException(`Role with ID ${id} not found`);
+        }
+
+        return {
+            id: role.id,
+            name: role.name,
+            key: role.key,
+            permissions: role.rolePermissions.map((rp) => ({
+                id: rp.permission.id,
+                name: rp.permission.name,
+                key: rp.permission.key,
+                resource: rp.permission.resource,
+            })),
+        };
     }
 
-    update(id: number, updateRoleDto: UpdateRoleDto) {
-        return `This action updates a #${id} role`;
+    async update(
+        id: number,
+        updateRoleDto: UpdateRoleDto,
+    ): Promise<RoleResponse> {
+        await this.findOne(id);
+
+        await this.prismaService.rolePermission.deleteMany({
+            where: { roleId: id },
+        });
+
+        if (updateRoleDto.permission_ids.length > 0) {
+            const rolePermissions = updateRoleDto.permission_ids.map(
+                (permissionId) => ({
+                    roleId: id,
+                    permissionId,
+                }),
+            );
+
+            await this.prismaService.rolePermission.createMany({
+                data: rolePermissions,
+                skipDuplicates: true,
+            });
+        }
+
+        return await this.findOne(id);
     }
 }
