@@ -44,7 +44,7 @@ export class UserResponse {
     avatar: string;
 
     @Expose()
-    phone: string;
+    phoneNumber: string;
 
     @Expose()
     @Type(() => RoleResponse)
