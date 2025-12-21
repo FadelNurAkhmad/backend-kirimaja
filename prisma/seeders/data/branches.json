@@ -1,0 +1,29 @@
+{
+    "data": [
+        {
+            "name": "Main Branch",
+            "address": "123 Main St, Cityville",
+            "phoneNumber": "555-1234"
+        },
+        {
+            "name": "East Side Branch",
+            "address": "456 East St, Cityville",
+            "phoneNumber": "555-5678"
+        },
+        {
+            "name": "West Side Branch",
+            "address": "789 West St, Cityville",
+            "phoneNumber": "555-8765"
+        },
+        {
+            "name": "North Branch",
+            "address": "321 North St, Cityville",
+            "phoneNumber": "555-4321"
+        },
+        {
+            "name": "South Branch",
+            "address": "654 South St, Cityville",
+            "phoneNumber": "555-6789"
+        }
+    ]
+}
