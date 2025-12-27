@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { rolesSeed } from './roles-seed';
 import { usersSeed } from './users-seed';
 import { permissionsSeed } from './permissions-seed';
-import { branchesSeed } from './branches-seed';
+import { employeeBranchesSeed } from './employee-branches-seed';
 
 const prisma = new PrismaClient();
 
@@ -18,7 +18,9 @@ async function main() {
     // 3. Seed users terakhir (membutuhkan roles)
     await usersSeed();
 
-    await branchesSeed();
+    // await branchesSeed();
+
+    await employeeBranchesSeed();
 
     console.log('🎉 Seeding selesai!');
 }

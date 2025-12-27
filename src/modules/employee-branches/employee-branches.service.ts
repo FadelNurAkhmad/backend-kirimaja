@@ -84,19 +84,128 @@ export class EmployeeBranchesService {
         });
     }
 
-    findAll() {
-        return `This action returns all employeeBranches`;
+    async findAll(): Promise<EmployeeBranch[]> {
+        return this.prismaService.employeeBranch.findMany({
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phoneNumber: true,
+                        avatar: true,
+                    },
+                },
+                branch: {
+                    select: { id: true, name: true, address: true },
+                },
+            },
+        });
     }
 
-    findOne(id: number) {
-        return `This action returns a #${id} employeeBranch`;
+    async findOne(id: number): Promise<EmployeeBranch> {
+        const employeeBranch =
+            await this.prismaService.employeeBranch.findUnique({
+                where: { id },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            phoneNumber: true,
+                            avatar: true,
+                        },
+                    },
+                    branch: {
+                        select: { id: true, name: true, address: true },
+                    },
+                },
+            });
+
+        if (!employeeBranch) {
+            throw new BadRequestException(
+                `EmployeeBranch with ID ${id} does not exist.`,
+            );
+        }
+
+        return employeeBranch;
     }
 
-    update(id: number, updateEmployeeBranchDto: UpdateEmployeeBranchDto) {
-        return `This action updates a #${id} employeeBranch`;
+    async update(
+        id: number,
+        updateEmployeeBranchDto: UpdateEmployeeBranchDto,
+    ): Promise<EmployeeBranch> {
+        const existingEmployeeBranch = await this.findOne(id);
+
+        const validationPromises: Promise<void>[] = [];
+
+        if (updateEmployeeBranchDto.email) {
+            validationPromises.push(
+                this.validateUniqueEmail(
+                    updateEmployeeBranchDto.email,
+                    existingEmployeeBranch.userId,
+                ),
+            );
+        }
+
+        if (updateEmployeeBranchDto.branch_id) {
+            validationPromises.push(
+                this.validateBranchExists(updateEmployeeBranchDto.branch_id),
+            );
+        }
+
+        if (updateEmployeeBranchDto.role_id) {
+            validationPromises.push(
+                this.validateRoleExists(updateEmployeeBranchDto.role_id),
+            );
+        }
+
+        return this.prismaService.$transaction(async (prisma) => {
+            await Promise.all(validationPromises);
+
+            const updatedUser = await prisma.user.update({
+                where: { id: existingEmployeeBranch.userId },
+                data: {
+                    name: updateEmployeeBranchDto.name,
+                    email: updateEmployeeBranchDto.email,
+                    phoneNumber: updateEmployeeBranchDto.phone_number,
+                    password: updateEmployeeBranchDto.password
+                        ? await bcrypt.hash(
+                              updateEmployeeBranchDto.password,
+                              10,
+                          )
+                        : undefined,
+                    avatar: updateEmployeeBranchDto.avatar,
+                    roleId: updateEmployeeBranchDto.role_id,
+                },
+            });
+
+            const updatedEmployeeBranch = await prisma.employeeBranch.update({
+                where: { id },
+                data: {
+                    branchId: updateEmployeeBranchDto.branch_id,
+                    type: updateEmployeeBranchDto.type,
+                },
+            });
+
+            return {
+                ...updatedEmployeeBranch,
+                user: updatedUser,
+            };
+        });
     }
 
-    remove(id: number) {
-        return `This action removes a #${id} employeeBranch`;
+    async remove(id: number): Promise<void> {
+        const employeeBranch = await this.findOne(id);
+        return this.prismaService.$transaction(async (prisma) => {
+            await prisma.user.delete({
+                where: { id: employeeBranch.userId },
+            });
+
+            await prisma.employeeBranch.delete({
+                where: { id },
+            });
+        });
     }
 }

@@ -1,0 +1,58 @@
+{
+    "data": [
+        {
+            "name": "Courier Yogyakarta",
+            "email": "courier.yogyakarta@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "courier",
+            "branchName": "Cabang Yogyakarta",
+            "type": "courier"
+        },
+        {
+            "name": "Admin Branch Yogyakarta",
+            "email": "admin.branch.yogyakarta@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "admin-branch",
+            "branchName": "Cabang Yogyakarta",
+            "type": "admin"
+        },
+        {
+            "name": "Courier Jakarta",
+            "email": "courier.jakarta@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "courier",
+            "branchName": "Cabang Jakarta",
+            "type": "courier"
+        },
+        {
+            "name": "Admin Branch Jakarta",
+            "email": "admin.branch.jakarta@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "admin-branch",
+            "branchName": "Cabang Jakarta",
+            "type": "admin"
+        },
+        {
+            "name": "Courier Surabaya",
+            "email": "courier.surabaya@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "courier",
+            "branchName": "Cabang Surabaya",
+            "type": "courier"
+        },
+        {
+            "name": "Admin Branch Surabaya",
+            "email": "admin.branch.surabaya@mail.com",
+            "password": "password123",
+            "phoneNumber": "0842738265321",
+            "roleKey": "admin-branch",
+            "branchName": "Cabang Surabaya",
+            "type": "admin"
+        }
+    ]
+}
