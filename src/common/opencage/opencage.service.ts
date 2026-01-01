@@ -4,7 +4,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import axios from 'axios';
 
 @Injectable()
-export class OpencageService {
+export class OpenCageService {
     async geocode(address: string): Promise<{ lat: number; lng: number }> {
         const apiKey = process.env.OPENCAGE_API_KEY;
         if (!apiKey) {
