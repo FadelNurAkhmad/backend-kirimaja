@@ -3,11 +3,15 @@ import { AppService } from './app.service';
 import { JwtAuthGuard } from './modules/auth/guards/logged-in.guard';
 import { PermissionGuard } from './modules/auth/decorators/permissions.guard';
 import { RequiredAnyPermissions } from './modules/auth/decorators/permissions.decorator';
+import { EmailService } from './common/email/email.service';
 
 @Controller()
-@UseGuards(JwtAuthGuard, PermissionGuard)
+// @UseGuards(JwtAuthGuard, PermissionGuard)
 export class AppController {
-    constructor(private readonly appService: AppService) {}
+    constructor(
+        private readonly appService: AppService,
+        private readonly emailService: EmailService,
+    ) {}
 
     @Get()
     // Rute ini tidak memiliki dekorator izin spesifik (@Required...),
@@ -22,5 +26,11 @@ export class AppController {
     @RequiredAnyPermissions('shipments.create')
     getProtectedResource(): string {
         return 'This is a protected resource';
+    }
+
+    @Get('send-email-test')
+    async sendTestEmail(): Promise<string> {
+        await this.emailService.testingEmail('testing@gmail.com');
+        return 'Test email sent';
     }
 }
