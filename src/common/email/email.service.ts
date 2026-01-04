@@ -12,6 +12,7 @@ export class EmailService {
     private transporter: nodemailer.Transporter;
     private tamplatesPath: string;
 
+    // Initialize the transporter and template path
     constructor() {
         this.transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
@@ -24,6 +25,7 @@ export class EmailService {
         this.tamplatesPath = path.join('./src/common/email/templates');
     }
 
+    // Load and compile Handlebars template
     private loadTemplate(templateName: string): string {
         const templatePath = path.join(
             this.tamplatesPath,
