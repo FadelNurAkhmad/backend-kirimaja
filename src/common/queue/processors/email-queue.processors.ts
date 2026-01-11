@@ -7,7 +7,7 @@ export interface EmailJobData {
     to: string;
     type: string;
     paymentUrl?: string;
-    shipmentId?: string;
+    shipmentId?: number;
     amount?: number;
     expiryDate?: Date;
 }
@@ -37,7 +37,7 @@ export class EmailQueueProcessors {
                     await this.emailService.sendEmailPaymentNotification(
                         data.to,
                         data.paymentUrl || '',
-                        data.shipmentId ? parseInt(data.shipmentId, 10) : 0,
+                        data.shipmentId || 0,
                         data.amount || 0,
                         data.expiryDate || new Date(),
                     );

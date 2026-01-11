@@ -1,14 +1,138 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import { QueueService } from 'src/common/queue/queue.service';
+import { OpenCageService } from 'src/common/opencage/opencage.service';
+import { XenditService } from 'src/common/xendit/xendit.service';
+import { Shipment } from '@prisma/client';
+import { getDistance } from 'geolib';
+import { PaymentStatus } from 'src/common/enum/payment-status.enum';
 
 @Injectable()
 export class ShipmentsService {
-    create(createShipmentDto: CreateShipmentDto) {
-        return 'This action adds a new shipment';
+    constructor(
+        private prismaService: PrismaService,
+        private queueService: QueueService,
+        private openCageService: OpenCageService,
+        private xenditService: XenditService,
+    ) {}
+
+    async create(createShipmentDto: CreateShipmentDto): Promise<Shipment> {
+        const { lat, lng } = await this.openCageService.geocode(
+            createShipmentDto.destination_address,
+        );
+
+        const userAddress = await this.prismaService.userAddress.findFirst({
+            where: { id: createShipmentDto.pickup_address_id },
+            include: { user: true },
+        });
+
+        if (!userAddress || !userAddress.latitude || !userAddress.longitude) {
+            throw new NotFoundException('Pickup address not found');
+        }
+
+        const distance = getDistance(
+            {
+                latitude: userAddress.latitude,
+                longitude: userAddress.longitude,
+            },
+            { latitude: lat, longitude: lng },
+        );
+
+        const shipmentCost = this.calculateShippingCost(
+            createShipmentDto.weight,
+            distance,
+            createShipmentDto.delivery_type,
+        );
+
+        const shipment = await this.prismaService.$transaction(
+            async (prisma) => {
+                const newShipment = await prisma.shipment.create({
+                    data: {
+                        paymentStatus: PaymentStatus.PENDING,
+                        distance: distance,
+                        price: shipmentCost.totalPrice,
+                    },
+                });
+
+                await prisma.shipmentDetail.create({
+                    data: {
+                        shipmentId: newShipment.id,
+                        pickupAddressId: createShipmentDto.pickup_address_id,
+                        destinationAddress:
+                            createShipmentDto.destination_address,
+                        recipientName: createShipmentDto.recipient_name,
+                        recipientPhone: createShipmentDto.recipient_phone,
+                        weight: createShipmentDto.weight,
+                        packageType: createShipmentDto.package_type,
+                        deliveryType: createShipmentDto.delivery_type,
+                        destinationLatitude: lat,
+                        destinationLongitude: lng,
+                        basePrice: shipmentCost.basePrice,
+                        weightPrice: shipmentCost.weightPrice,
+                        distancePrice: shipmentCost.distancePrice,
+                        userId: userAddress.userId,
+                    },
+                });
+                return newShipment;
+            },
+        );
+
+        const invoice = await this.xenditService.createInvoice({
+            externalId: `INV-${Date.now()}-${shipment.id}`,
+            amount: shipmentCost.totalPrice,
+            payerEmail: userAddress.user.email,
+            description: `Shipment #${shipment.id} from ${userAddress.address} to ${createShipmentDto.destination_address}`,
+            successRedirectUrl: `${process.env.FRONTEND_URL}/send-package/detail/${shipment.id}`,
+            invoiceDuration: 86400,
+        });
+
+        const payment = await this.prismaService.$transaction(
+            // prisma (parameter): Terikat pada sesi transaksi yang sedang berjalan. Jika terjadi error, semua perintah melalui variabel ini akan di-rollback.
+            async (prisma) => {
+                // 1. Kirim data Payment ke antrean transaksi
+                const createdPayment = await prisma.payment.create({
+                    data: {
+                        shipmentId: shipment.id,
+                        externalId: invoice.external_id,
+                        invoiceUrl: invoice.invoice_url,
+                        invoiceId: invoice.id,
+                        status: invoice.status,
+                        expiryDate: invoice.expiry_date,
+                    },
+                });
+
+                // 2. Kirim data ShipmentHistory ke antrean transaksi
+                await prisma.shipmentHistory.create({
+                    data: {
+                        shipmentId: shipment.id,
+                        status: PaymentStatus.PENDING,
+                        description: `Shipment created, with total price Rp${shipmentCost.totalPrice}`,
+                    },
+                });
+
+                // 3. Jika sampai sini tanpa error, SELESAI -> COMMIT ke Database
+                return createdPayment;
+            },
+        );
+
+        try {
+            await this.queueService.addEmailJob({
+                type: 'payment-notification',
+                to: userAddress.user.email,
+                shipmentId: shipment.id,
+                amount: shipmentCost.totalPrice,
+                paymentUrl: invoice.invoiceUrl,
+                expiryDate: invoice.expiryDate,
+            });
+        } catch (error) {
+            console.error('Failed to enqueue email job:', error);
+        }
+        return shipment;
     }
 
     findAll() {
@@ -88,7 +212,7 @@ export class ShipmentsService {
 
         const totalPrice = basePrice + weightPrice + distancePrice;
         const minimumPrice = 10000;
-        const finalPrice = Math.max(totalPrice, minimumPrice);
+        const finalPrice = Math.max(totalPrice, minimumPrice); // Ensure minimum charge
 
         return {
             totalPrice: finalPrice,

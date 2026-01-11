@@ -21,6 +21,12 @@ const CreateShipmentSchema = z.object({
             invalid_type_error: 'Recipient name must be a string',
         })
         .min(1, { message: 'Recipient name cannot be empty' }),
+    recipient_phone: z
+        .string({
+            required_error: 'Recipient phone is required',
+            invalid_type_error: 'Recipient phone must be a string',
+        })
+        .min(1, { message: 'Recipient phone cannot be empty' }),
     weight: z
         .number({
             required_error: 'Weight is required',
@@ -47,6 +53,7 @@ export class CreateShipmentDto {
         public pickup_address_id: number,
         public destination_address: string,
         public recipient_name: string,
+        public recipient_phone: string,
         public weight: number,
         public package_type: string,
         public delivery_type: string,
