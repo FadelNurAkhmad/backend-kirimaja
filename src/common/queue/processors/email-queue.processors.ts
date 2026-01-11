@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
@@ -34,12 +35,16 @@ export class EmailQueueProcessors {
                     break;
 
                 case 'payment-notification':
+                    const expiryDate =
+                        typeof data.expiryDate === 'string'
+                            ? new Date(data.expiryDate)
+                            : data.expiryDate;
                     await this.emailService.sendEmailPaymentNotification(
                         data.to,
                         data.paymentUrl || '',
                         data.shipmentId || 0,
                         data.amount || 0,
-                        data.expiryDate || new Date(),
+                        expiryDate || new Date(),
                     );
                     this.logger.log(
                         `Successfully sent payment notification email to ${data.to}`,

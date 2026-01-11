@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -43,9 +44,11 @@ export class ShipmentsService {
             { latitude: lat, longitude: lng },
         );
 
+        const distanceInKm = Math.ceil(distance / 1000); // Convert to kilometers
+
         const shipmentCost = this.calculateShippingCost(
             createShipmentDto.weight,
-            distance,
+            distanceInKm,
             createShipmentDto.delivery_type,
         );
 
@@ -54,7 +57,7 @@ export class ShipmentsService {
                 const newShipment = await prisma.shipment.create({
                     data: {
                         paymentStatus: PaymentStatus.PENDING,
-                        distance: distance,
+                        distance: distanceInKm,
                         price: shipmentCost.totalPrice,
                     },
                 });
@@ -88,7 +91,7 @@ export class ShipmentsService {
             payerEmail: userAddress.user.email,
             description: `Shipment #${shipment.id} from ${userAddress.address} to ${createShipmentDto.destination_address}`,
             successRedirectUrl: `${process.env.FRONTEND_URL}/send-package/detail/${shipment.id}`,
-            invoiceDuration: 86400,
+            invoiceDuration: 10, // 10 seconds for testing
         });
 
         const payment = await this.prismaService.$transaction(
@@ -132,6 +135,20 @@ export class ShipmentsService {
         } catch (error) {
             console.error('Failed to enqueue email job:', error);
         }
+
+        try {
+            await this.queueService.addPaymentExpiredJob(
+                {
+                    paymentId: payment.id,
+                    shipmentId: shipment.id,
+                    externalId: payment.externalId!, // Non-null assertion operator // tanda ! TypeScript akan mengizinkannya karena Anda menjamin nilainya bukan null/undefined.
+                },
+                invoice.expiryDate,
+            );
+        } catch (error) {
+            console.error('Failed to enqueue payment expiry job:', error);
+        }
+
         return shipment;
     }
 
