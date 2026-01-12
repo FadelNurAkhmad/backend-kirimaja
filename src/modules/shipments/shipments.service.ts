@@ -1,8 +1,13 @@
+import { ShipmentStatus } from './../../common/enum/shipment-status.enum';
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -12,6 +17,8 @@ import { XenditService } from 'src/common/xendit/xendit.service';
 import { Shipment } from '@prisma/client';
 import { getDistance } from 'geolib';
 import { PaymentStatus } from 'src/common/enum/payment-status.enum';
+import { XenditWebhookDto } from './dto/xendit-webhook.dto';
+import { QrCodeService } from 'src/common/qrcode/qrcode.service';
 
 @Injectable()
 export class ShipmentsService {
@@ -20,6 +27,7 @@ export class ShipmentsService {
         private queueService: QueueService,
         private openCageService: OpenCageService,
         private xenditService: XenditService,
+        private qrCodeService: QrCodeService,
     ) {}
 
     async create(createShipmentDto: CreateShipmentDto): Promise<Shipment> {
@@ -150,6 +158,118 @@ export class ShipmentsService {
         }
 
         return shipment;
+    }
+
+    async handlePaymentWebhook(webhookData: XenditWebhookDto): Promise<void> {
+        // Cari Payment berdasarkan external_id dari webhook
+        const payment = await this.prismaService.payment.findFirst({
+            where: { externalId: webhookData.external_id },
+            include: {
+                shipment: {
+                    include: {
+                        shipmentDetails: {
+                            include: { user: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!payment) {
+            throw new NotFoundException(
+                'Payment not found for external ID: ' + webhookData.external_id,
+            );
+        }
+
+        // Transaksi: Update Payment & Shipment secara atomik
+        await this.prismaService.$transaction(async (prisma) => {
+            await prisma.payment.update({
+                where: { id: payment.id },
+                data: {
+                    status: webhookData.status,
+                    paymentMethod: webhookData.payment_method,
+                },
+            });
+
+            if (
+                webhookData.status === PaymentStatus.PAID ||
+                webhookData.status === PaymentStatus.SETTLED
+            ) {
+                const trackingNumber = `KA${webhookData.id}`;
+
+                let qrcodeImagePath: string | null = null;
+
+                // Generate QR Code
+                try {
+                    qrcodeImagePath =
+                        await this.qrCodeService.generateQrCode(trackingNumber);
+                } catch (error) {
+                    console.error(
+                        'Failed to generate QR code:',
+                        trackingNumber,
+                    );
+
+                    throw new BadRequestException(
+                        `Failed to generate QR code for tracking number: ${
+                            trackingNumber
+                        }`,
+                    );
+                }
+
+                // Update Shipment dengan tracking number dan status terbaru
+                await prisma.shipment.update({
+                    where: { id: payment.shipmentId },
+                    data: {
+                        trackingNumber,
+                        deliveryStatus: ShipmentStatus.READY_TO_PICKUP,
+                        paymentStatus: PaymentStatus.SETTLED,
+                        qrCodeImage: qrcodeImagePath,
+                    },
+                });
+
+                // Tambah ShipmentHistory baru
+                await prisma.shipmentHistory.create({
+                    data: {
+                        shipmentId: payment.shipmentId,
+                        status: ShipmentStatus.READY_TO_PICKUP,
+                        description: `Payment ${webhookData.status} for shipment with tracking number ${trackingNumber}`,
+                        userId: payment.shipment.shipmentDetails[0].userId,
+                    },
+                });
+
+                // Batalkan job kadaluarsa pembayaran yang masih tertunda
+                try {
+                    await this.queueService.cancelPaymentExpiryJob(payment.id);
+                } catch (error) {
+                    console.error(
+                        `Failed to cancel payment expiry job for payment ID: ${payment.id}`,
+                        error,
+                    );
+                }
+
+                // Enqueue email notifikasi pembayaran berhasil
+                try {
+                    const userEmail =
+                        payment.shipment.shipmentDetails[0].user.email;
+                    if (userEmail) {
+                        await this.queueService.addEmailJob({
+                            type: 'payment-notification',
+                            to: userEmail,
+                            shipmentId: payment.shipmentId,
+                            amount:
+                                payment.shipment.price || webhookData.amount,
+                            trackingNumber:
+                                payment.shipment.trackingNumber! || undefined,
+                        });
+                    }
+                } catch (error) {
+                    console.error(
+                        'Failed to enqueue payment success email job:',
+                        error,
+                    );
+                }
+            }
+        });
     }
 
     findAll() {

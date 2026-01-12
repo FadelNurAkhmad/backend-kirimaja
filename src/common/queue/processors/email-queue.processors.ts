@@ -11,6 +11,7 @@ export interface EmailJobData {
     shipmentId?: number;
     amount?: number;
     expiryDate?: Date;
+    trackingNumber?: string;
 }
 
 @Processor('email-queue')

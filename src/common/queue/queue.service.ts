@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { EmailJobData } from './processors/email-queue.processors';
@@ -49,5 +50,19 @@ export class QueueService {
             removeOnComplete: 10,
             removeOnFail: 5,
         });
+    }
+
+    async cancelPaymentExpiryJob(paymentId: number) {
+        const jobs = await this.paymentExpiryQueue.getJobs([
+            'delayed',
+            'waiting',
+        ]);
+
+        for (const job of jobs) {
+            if (job.data.paymentId === paymentId) {
+                await job.remove();
+                break;
+            }
+        }
     }
 }
