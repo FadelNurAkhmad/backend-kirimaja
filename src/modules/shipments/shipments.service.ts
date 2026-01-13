@@ -19,6 +19,7 @@ import { getDistance } from 'geolib';
 import { PaymentStatus } from 'src/common/enum/payment-status.enum';
 import { XenditWebhookDto } from './dto/xendit-webhook.dto';
 import { QrCodeService } from 'src/common/qrcode/qrcode.service';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class ShipmentsService {
@@ -29,6 +30,7 @@ export class ShipmentsService {
         private xenditService: XenditService,
         private qrCodeService: QrCodeService,
     ) {}
+    private readonly logger = new Logger('WebhookDebug');
 
     async create(createShipmentDto: CreateShipmentDto): Promise<Shipment> {
         const { lat, lng } = await this.openCageService.geocode(
@@ -109,11 +111,11 @@ export class ShipmentsService {
                 const createdPayment = await prisma.payment.create({
                     data: {
                         shipmentId: shipment.id,
-                        externalId: invoice.external_id,
-                        invoiceUrl: invoice.invoice_url,
+                        externalId: invoice.externalId,
+                        invoiceUrl: invoice.invoice_url || invoice.invoiceUrl,
                         invoiceId: invoice.id,
                         status: invoice.status,
-                        expiryDate: invoice.expiry_date,
+                        expiryDate: invoice.expiry_date || invoice.expiryDate,
                     },
                 });
 
@@ -122,7 +124,8 @@ export class ShipmentsService {
                     data: {
                         shipmentId: shipment.id,
                         status: PaymentStatus.PENDING,
-                        description: `Shipment created, with total price Rp${shipmentCost.totalPrice}`,
+                        description: `Shipment created, with total price Rp${shipmentCost.totalPrice.toLocaleString()}`,
+                        userId: userAddress.userId,
                     },
                 });
 
@@ -161,6 +164,14 @@ export class ShipmentsService {
     }
 
     async handlePaymentWebhook(webhookData: XenditWebhookDto): Promise<void> {
+        // Cetak seluruh data yang masuk dari Xendit
+        // this.logger.log('--- Incoming Webhook Data ---');
+        // this.logger.log(JSON.stringify(webhookData, null, 2));
+        // this.logger.log('-----------------------------');
+
+        // // Cek kondisi spesifik
+        // this.logger.debug(`Status dari Xendit: ${webhookData.status}`);
+        // this.logger.debug(`External ID: ${webhookData.external_id}`);
         // Cari Payment berdasarkan external_id dari webhook
         const payment = await this.prismaService.payment.findFirst({
             where: { externalId: webhookData.external_id },
@@ -182,94 +193,107 @@ export class ShipmentsService {
         }
 
         // Transaksi: Update Payment & Shipment secara atomik
-        await this.prismaService.$transaction(async (prisma) => {
-            await prisma.payment.update({
-                where: { id: payment.id },
-                data: {
-                    status: webhookData.status,
-                    paymentMethod: webhookData.payment_method,
-                },
-            });
 
-            if (
-                webhookData.status === PaymentStatus.PAID ||
-                webhookData.status === PaymentStatus.SETTLED
-            ) {
-                const trackingNumber = `KA${webhookData.id}`;
-
-                let qrcodeImagePath: string | null = null;
-
-                // Generate QR Code
-                try {
-                    qrcodeImagePath =
-                        await this.qrCodeService.generateQrCode(trackingNumber);
-                } catch (error) {
-                    console.error(
-                        'Failed to generate QR code:',
-                        trackingNumber,
-                    );
-
-                    throw new BadRequestException(
-                        `Failed to generate QR code for tracking number: ${
-                            trackingNumber
-                        }`,
-                    );
-                }
-
-                // Update Shipment dengan tracking number dan status terbaru
-                await prisma.shipment.update({
-                    where: { id: payment.shipmentId },
+        try {
+            await this.prismaService.$transaction(async (prisma) => {
+                const updatedPayment = await prisma.payment.update({
+                    where: { id: payment.id },
                     data: {
-                        trackingNumber,
-                        deliveryStatus: ShipmentStatus.READY_TO_PICKUP,
-                        paymentStatus: PaymentStatus.SETTLED,
-                        qrCodeImage: qrcodeImagePath,
+                        status: webhookData.status,
+                        paymentMethod: webhookData.payment_method,
                     },
                 });
 
-                // Tambah ShipmentHistory baru
-                await prisma.shipmentHistory.create({
-                    data: {
-                        shipmentId: payment.shipmentId,
-                        status: ShipmentStatus.READY_TO_PICKUP,
-                        description: `Payment ${webhookData.status} for shipment with tracking number ${trackingNumber}`,
-                        userId: payment.shipment.shipmentDetails[0].userId,
-                    },
-                });
+                if (
+                    webhookData.status === PaymentStatus.PAID ||
+                    webhookData.status === PaymentStatus.SETTLED
+                ) {
+                    const trackingNumber = `KA${webhookData.id}`;
 
-                // Batalkan job kadaluarsa pembayaran yang masih tertunda
-                try {
-                    await this.queueService.cancelPaymentExpiryJob(payment.id);
-                } catch (error) {
-                    console.error(
-                        `Failed to cancel payment expiry job for payment ID: ${payment.id}`,
-                        error,
-                    );
-                }
+                    let qrcodeImagePath: string | null = null;
 
-                // Enqueue email notifikasi pembayaran berhasil
-                try {
-                    const userEmail =
-                        payment.shipment.shipmentDetails[0].user.email;
-                    if (userEmail) {
-                        await this.queueService.addEmailJob({
-                            type: 'payment-success',
-                            to: userEmail,
-                            shipmentId: payment.shipmentId,
-                            amount:
-                                payment.shipment.price || webhookData.amount,
-                            trackingNumber:
-                                payment.shipment.trackingNumber! || undefined,
-                        });
+                    // Generate QR Code
+                    try {
+                        qrcodeImagePath =
+                            await this.qrCodeService.generateQrCode(
+                                trackingNumber,
+                            );
+                    } catch (error) {
+                        console.error(
+                            'Failed to generate QR code:',
+                            trackingNumber,
+                        );
+
+                        throw new BadRequestException(
+                            `Failed to generate QR code for tracking number: ${
+                                trackingNumber
+                            }`,
+                        );
                     }
-                } catch (error) {
-                    console.error(
-                        'Failed to enqueue payment success email job:',
-                        error,
-                    );
+
+                    // Update Shipment dengan tracking number dan status terbaru
+                    await prisma.shipment.update({
+                        where: { id: payment.shipmentId },
+                        data: {
+                            trackingNumber,
+                            deliveryStatus: ShipmentStatus.READY_TO_PICKUP,
+                            paymentStatus: webhookData.status,
+                            qrCodeImage: qrcodeImagePath,
+                        },
+                    });
+
+                    // Tambah ShipmentHistory baru
+                    await prisma.shipmentHistory.create({
+                        data: {
+                            shipmentId: payment.shipmentId,
+                            status: ShipmentStatus.READY_TO_PICKUP,
+                            description: `Payment ${webhookData.status} for shipment with tracking number ${trackingNumber}`,
+                            userId: payment.shipment.shipmentDetails[0]?.userId,
+                        },
+                    });
+
+                    // Batalkan job kadaluarsa pembayaran yang masih tertunda
+                    try {
+                        await this.queueService.cancelPaymentExpiryJob(
+                            payment.id,
+                        );
+                    } catch (error) {
+                        console.error(
+                            `Failed to cancel payment expiry job for payment ID: ${payment.id}`,
+                            error,
+                        );
+                    }
+
+                    // Enqueue email notifikasi pembayaran berhasil
+                    try {
+                        const userEmail =
+                            payment.shipment.shipmentDetails[0]?.user.email;
+                        if (userEmail) {
+                            await this.queueService.addEmailJob({
+                                type: 'payment-success',
+                                to: userEmail,
+                                shipmentId: payment.shipmentId,
+                                amount:
+                                    payment.shipment.price ||
+                                    webhookData.amount,
+                                trackingNumber:
+                                    payment.shipment.trackingNumber! ||
+                                    undefined,
+                            });
+                        }
+                    } catch (error) {
+                        console.error(
+                            'Failed to enqueue payment success email job:',
+                            error,
+                        );
+                    }
                 }
-            }
-        });
+                this.logger.log('Berhasil update data di dalam transaksi');
+            });
+        } catch (error) {
+            this.logger.error('TRANSAKSI GAGAL (ROLLBACK):', error.message);
+            throw error;
+        }
     }
 
     findAll() {
