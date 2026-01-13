@@ -99,7 +99,7 @@ export class ShipmentsService {
             payerEmail: userAddress.user.email,
             description: `Shipment #${shipment.id} from ${userAddress.address} to ${createShipmentDto.destination_address}`,
             successRedirectUrl: `${process.env.FRONTEND_URL}/send-package/detail/${shipment.id}`,
-            invoiceDuration: 10, // 10 seconds for testing
+            invoiceDuration: 86400, // 24 hours in seconds
         });
 
         const payment = await this.prismaService.$transaction(
@@ -253,7 +253,7 @@ export class ShipmentsService {
                         payment.shipment.shipmentDetails[0].user.email;
                     if (userEmail) {
                         await this.queueService.addEmailJob({
-                            type: 'payment-notification',
+                            type: 'payment-success',
                             to: userEmail,
                             shipmentId: payment.shipmentId,
                             amount:
