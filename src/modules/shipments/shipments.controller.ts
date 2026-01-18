@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
     Controller,
     Get,
@@ -7,7 +9,10 @@ import {
     Param,
     Delete,
     UseGuards,
+    Res,
+    Req,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
@@ -32,14 +37,49 @@ export class ShipmentsController {
         };
     }
 
+    // user?: any adalah cara Anda memberi tahu TypeScript bahwa ada properti user.
+    //Isi datanya berasal dari hasil decode Token JWT yang disuntikkan oleh middleware authentication sebelum masuk ke Controller.
     @Get()
-    findAll() {
-        return this.shipmentsService.findAll();
+    async findAll(
+        @Req() req: Request & { user?: any },
+    ): Promise<BaseResponse<Shipment[]>> {
+        return {
+            data: await this.shipmentsService.findAll(req.user.id),
+            message: 'Shipments retrieved successfully',
+        };
     }
 
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.shipmentsService.findOne(+id);
+    async findOne(@Param('id') id: string): Promise<BaseResponse<Shipment>> {
+        return {
+            data: await this.shipmentsService.findOne(+id),
+            message: 'Shipment retrieved successfully',
+        };
+    }
+
+    @Get(':id/pdf')
+    async getShipmentPdf(
+        @Param('id') id: string,
+        @Res() res: Response,
+    ): Promise<void> {
+        const pdfBuffer = await this.shipmentsService.generateShipmentPdf(+id);
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=shipment_${id}.pdf`,
+        });
+        res.send(pdfBuffer);
+    }
+
+    @Get('tracking/:trackingNumber')
+    async findShipmentByTrackingNumber(
+        @Param('trackingNumber') trackingNumber: string,
+    ): Promise<BaseResponse<Shipment>> {
+        return {
+            data: await this.shipmentsService.findShipmentByTrackingNumber(
+                trackingNumber,
+            ),
+            message: 'Shipment retrieved successfully',
+        };
     }
 
     @Patch(':id')

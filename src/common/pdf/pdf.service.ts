@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { Injectable } from '@nestjs/common';
 import Handlebars from 'handlebars';
-import path from 'path/win32';
-import fs from 'fs'; // Using fs module to read files
+import * as path from 'path';
+import * as fs from 'fs'; // Node.js file system module
 import puppeteer from 'puppeteer';
 
 export interface ShipmentPdfData {
@@ -79,7 +79,7 @@ export class PdfService {
         const css = await this.loadCssFile('shipping-pdf.css');
 
         const qrCodeBase64 = data.qrCodePath
-            ? this.getBase64Image(data.qrCodePath)
+            ? this.getBase64Image(`public/${data.qrCodePath}`)
             : '';
 
         const templateData = {

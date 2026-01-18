@@ -20,6 +20,7 @@ import { PaymentStatus } from 'src/common/enum/payment-status.enum';
 import { XenditWebhookDto } from './dto/xendit-webhook.dto';
 import { QrCodeService } from 'src/common/qrcode/qrcode.service';
 import { Logger } from '@nestjs/common';
+import { PdfService, ShipmentPdfData } from 'src/common/pdf/pdf.service';
 
 @Injectable()
 export class ShipmentsService {
@@ -29,6 +30,7 @@ export class ShipmentsService {
         private openCageService: OpenCageService,
         private xenditService: XenditService,
         private qrCodeService: QrCodeService,
+        private pdfService: PdfService,
     ) {}
     private readonly logger = new Logger('WebhookDebug');
 
@@ -296,12 +298,31 @@ export class ShipmentsService {
         }
     }
 
-    findAll() {
-        return `This action returns all shipments`;
+    async findAll(userId: number): Promise<Shipment[]> {
+        return this.prismaService.shipment.findMany({
+            where: { shipmentDetails: { some: { userId } } },
+            include: {
+                shipmentDetails: true,
+                payments: true,
+                shipmentHistories: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
     }
 
-    findOne(id: number) {
-        return `This action returns a #${id} shipment`;
+    async findOne(id: number): Promise<Shipment> {
+        const shipment = await this.prismaService.shipment.findUnique({
+            where: { id },
+            include: {
+                shipmentDetails: true,
+                payments: true,
+                shipmentHistories: true,
+            },
+        });
+        if (!shipment) {
+            throw new NotFoundException(`Shipment with ID ${id} not found`);
+        }
+        return shipment;
     }
 
     update(id: number, updateShipmentDto: UpdateShipmentDto) {
@@ -381,5 +402,87 @@ export class ShipmentsService {
             weightPrice,
             distancePrice,
         };
+    }
+
+    async generateShipmentPdf(shipmentId: number): Promise<Buffer> {
+        // Placeholder implementation
+        // In a real implementation, you would fetch shipment details and generate a PDF
+        const shipment = await this.prismaService.shipment.findUnique({
+            where: { id: shipmentId },
+            include: {
+                shipmentDetails: {
+                    include: {
+                        user: true,
+                        pickupAddress: true,
+                    },
+                },
+                payments: true,
+            },
+        });
+
+        if (!shipment) {
+            throw new NotFoundException(
+                `Shipment with ID ${shipmentId} not found`,
+            );
+        }
+
+        const shipmentDetail = shipment.shipmentDetails[0];
+        if (!shipmentDetail) {
+            throw new NotFoundException(
+                `Shipment details for shipment ID ${shipmentId} not found`,
+            );
+        }
+
+        const pdfData: ShipmentPdfData = {
+            trackingNumber: shipment.trackingNumber || 'N/A',
+            shipmentId: shipment.id,
+            createdAt: shipment.createdAt,
+            deliveryType: shipmentDetail.deliveryType,
+            packageType: shipmentDetail.packageType,
+            weight: shipmentDetail.weight || 0,
+            price: shipment.price || 0,
+            distance: shipment.distance || 0,
+            paymentStatus: shipment.paymentStatus || 'N/A',
+            deliveryStatus: shipment.deliveryStatus || 'N/A',
+            basePrice: shipmentDetail.basePrice || 0,
+            weightPrice: shipmentDetail.weightPrice || 0,
+            distancePrice: shipmentDetail.distancePrice || 0,
+            senderName: shipmentDetail.user.name || 'N/A',
+            senderEmail: shipmentDetail.user.email || 'N/A',
+            senderPhone: shipmentDetail.user.phoneNumber || 'N/A',
+            pickupAddress: `${shipmentDetail.pickupAddress?.address}` || 'N/A',
+            recipientName: shipmentDetail.recipientName || 'N/A',
+            recipientPhone: shipmentDetail.recipientPhone || 'N/A',
+            destinationAddress: `${shipmentDetail.destinationAddress}` || 'N/A',
+            qrCodePath:
+                shipment.qrCodeImage ||
+                (await this.qrCodeService.generateQrCode(
+                    shipment.trackingNumber || 'N/A',
+                )),
+        };
+
+        return this.pdfService.generateShipmentPdf(pdfData);
+    }
+
+    async findShipmentByTrackingNumber(
+        trackingNumber: string,
+    ): Promise<Shipment | null> {
+        const shipment = await this.prismaService.shipment.findFirst({
+            where: { trackingNumber },
+            include: {
+                shipmentDetails: {
+                    include: { user: true, pickupAddress: true },
+                },
+                payments: true,
+                shipmentHistories: { orderBy: { createdAt: 'desc' } },
+            },
+        });
+
+        if (!shipment) {
+            throw new NotFoundException(
+                `Shipment with tracking number ${trackingNumber} not found`,
+            );
+        }
+        return shipment;
     }
 }
