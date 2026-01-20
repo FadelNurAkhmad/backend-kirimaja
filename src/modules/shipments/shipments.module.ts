@@ -8,10 +8,17 @@ import { XenditService } from 'src/common/xendit/xendit.service';
 import { ShipmentWebhookController } from './webhook/shipment-webhook.controller';
 import { QrCodeService } from 'src/common/qrcode/qrcode.service';
 import { PdfService } from 'src/common/pdf/pdf.service';
+import { PermissionsService } from '../permissions/permissions.service';
+import { ShipmentCourierService } from './courier/shipment-courier.service';
+import { ShipmentCourierController } from './courier/shipment-courier.controller';
 
 @Module({
     imports: [QueueModule],
-    controllers: [ShipmentsController, ShipmentWebhookController],
+    controllers: [
+        ShipmentsController,
+        ShipmentWebhookController,
+        ShipmentCourierController,
+    ],
     providers: [
         ShipmentsService,
         PrismaService,
@@ -19,6 +26,8 @@ import { PdfService } from 'src/common/pdf/pdf.service';
         XenditService,
         QrCodeService,
         PdfService,
+        ShipmentCourierService,
+        PermissionsService,
     ],
 })
 export class ShipmentsModule {}
