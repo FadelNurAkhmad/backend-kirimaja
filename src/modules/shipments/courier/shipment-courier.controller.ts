@@ -111,4 +111,78 @@ export class ShipmentCourierController {
             message: 'Shipment delivered to branch successfully',
         };
     }
+
+    @Get('pick-shipment-from-branch/:trackingNumber')
+    @RequiredPermissions('delivery.update')
+    async pickShipmentFromBranch(
+        @Param('trackingNumber') trackingNumber: string,
+        @Req() req: Request & { user?: any },
+    ): Promise<BaseResponse<Shipment>> {
+        return {
+            data: await this.shipmentCourierService.pickShipmentFromBranch(
+                trackingNumber,
+                req.user.id,
+            ),
+            message: 'Shipment picked from branch successfully',
+        };
+    }
+
+    @Get('pickup-shipment-from-branch/:trackingNumber')
+    @RequiredPermissions('delivery.update')
+    async pickupShipmentFromBranch(
+        @Param('trackingNumber') trackingNumber: string,
+        @Req() req: Request & { user?: any },
+    ): Promise<BaseResponse<Shipment>> {
+        return {
+            data: await this.shipmentCourierService.pickupShipmentFromBranch(
+                trackingNumber,
+                req.user.id,
+            ),
+            message: 'Shipment picked up from branch successfully',
+        };
+    }
+
+    @Post('deliver-to-customer/:trackingNumber')
+    @RequiredPermissions('delivery.update')
+    @UseInterceptors(
+        // Configure file upload interceptor
+        FileInterceptor('photo', {
+            storage: diskStorage({
+                // mengatur di mana dan bagaimana file tersebut disimpan di server (hard drive/disk).
+                destination: './public/uploads/photos',
+                // Kode ini membuat string unik gabungan dari waktu saat ini (Date.now()) dan angka acak besar.
+                filename: (req, file, cb) => {
+                    const uniqueSuffix =
+                        Date.now() + '-' + Math.round(Math.random() * 1e9);
+                    cb(null, uniqueSuffix + extname(file.originalname));
+                },
+            }),
+            fileFilter: (req, file, cb) => {
+                if (!file.originalname.match(/\.(jpg|jpeg|png|gif|avif)$/)) {
+                    return cb(
+                        new Error('Only image files are allowed!'),
+                        false,
+                    );
+                }
+                cb(null, true);
+            },
+        }),
+    )
+    async deliverToCustomer(
+        @Param('trackingNumber') trackingNumber: string,
+        @Req() req: Request & { user?: any },
+        @UploadedFile() receiptProofImage: Express.Multer.File | undefined,
+    ): Promise<BaseResponse<Shipment>> {
+        if (!receiptProofImage) {
+            throw new BadRequestException('Receipt proof image is required');
+        }
+        return {
+            data: await this.shipmentCourierService.deliverToCustomer(
+                trackingNumber,
+                req.user.id,
+                receiptProofImage.filename,
+            ),
+            message: 'Shipment delivered to customer successfully',
+        };
+    }
 }
