@@ -11,6 +11,8 @@ import { PdfService } from 'src/common/pdf/pdf.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { ShipmentCourierService } from './courier/shipment-courier.service';
 import { ShipmentCourierController } from './courier/shipment-courier.controller';
+import { ShipmentBranchService } from './branch/shipment-branch.service';
+import { ShipmentBranchController } from './branch/shipment-branch.controller';
 
 @Module({
     imports: [QueueModule],
@@ -18,6 +20,7 @@ import { ShipmentCourierController } from './courier/shipment-courier.controller
         ShipmentsController,
         ShipmentWebhookController,
         ShipmentCourierController,
+        ShipmentBranchController,
     ],
     providers: [
         ShipmentsService,
@@ -28,6 +31,7 @@ import { ShipmentCourierController } from './courier/shipment-courier.controller
         PdfService,
         ShipmentCourierService,
         PermissionsService,
+        ShipmentBranchService,
     ],
 })
 export class ShipmentsModule {}
