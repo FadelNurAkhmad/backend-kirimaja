@@ -4,8 +4,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
     BadRequestException,
+    Body,
     Controller,
     Get,
+    Post,
     Req,
     UseGuards,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import { BaseResponse } from 'src/common/interface/base-response.interface';
 import { Shipment, ShipmentBranchLog } from '@prisma/client';
 import { PermissionGuard } from 'src/modules/auth/decorators/permissions.guard';
 import { RequiredPermissions } from 'src/modules/auth/decorators/permissions.decorator';
+import { ScanShipmentDto } from '../dto/scan-shipmnet.dto';
 
 @Controller('shipments/branch')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -40,5 +43,22 @@ export class ShipmentBranchController {
                 'Failed to retrieve shipment branch logs',
             );
         }
+    }
+
+    @Post('scan')
+    async scanShipment(
+        @Body() scanShipmentDto: ScanShipmentDto,
+        @Req() req: Request & { user?: any },
+    ): Promise<BaseResponse<ShipmentBranchLog>> {
+        const user = req.user;
+        const shipment = await this.shipmentBranchService.scanShipment(
+            scanShipmentDto,
+            user.id,
+        );
+
+        return {
+            data: shipment,
+            message: 'Shipment scanned successfully',
+        };
     }
 }
