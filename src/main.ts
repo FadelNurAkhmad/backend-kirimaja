@@ -13,6 +13,14 @@ async function bootstrap() {
 
     app.useStaticAssets('public'); // dapat akses preview data di public
 
+    app.enableCors({
+        origin: process.env.CORS_ORIGIN?.split(',') || '*',
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        allowedHeaders:
+            'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+        credentials: true,
+    });
+
     const port = process.env.PORT || 3000;
     await app.listen(port);
 
