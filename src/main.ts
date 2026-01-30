@@ -13,6 +13,7 @@ async function bootstrap() {
 
     app.useStaticAssets('public'); // dapat akses preview data di public
 
+    // Enable CORS with specific settings
     app.enableCors({
         origin: process.env.CORS_ORIGIN?.split(',') || '*',
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
