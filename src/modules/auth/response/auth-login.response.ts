@@ -48,7 +48,7 @@ export class UserResponse {
 
     @Expose()
     @Type(() => RoleResponse)
-    role: RoleResponse[];
+    role: RoleResponse; // ✅ BUKAN array
 }
 
 export class AuthLoginResponse {

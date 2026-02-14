@@ -72,12 +72,14 @@ export class AuthService {
             ...userWithoutPassword,
             role: {
                 ...user.role, // ...user.role: Menyalin semua properti dasar dari objek role lama (seperti id, name peran) ke objek peran yang baru.
-                permission: user.role.rolePermissions.map((rolePermission) => ({
-                    id: rolePermission.permission.id,
-                    name: rolePermission.permission.name,
-                    key: rolePermission.permission.key,
-                    resource: rolePermission.permission.resource,
-                })),
+                permissions: user.role.rolePermissions.map(
+                    (rolePermission) => ({
+                        id: rolePermission.permission.id,
+                        name: rolePermission.permission.name,
+                        key: rolePermission.permission.key,
+                        resource: rolePermission.permission.resource,
+                    }),
+                ),
             },
         };
 

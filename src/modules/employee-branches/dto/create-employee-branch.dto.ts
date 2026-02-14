@@ -20,7 +20,8 @@ const employeeBranchSchema = z.object({
         })
         .min(1, {
             message: 'Branch address must be least 1 character long',
-        }),
+        })
+        .optional(),
     phone_number: z
         .string({
             required_error: 'Phone number is required',
