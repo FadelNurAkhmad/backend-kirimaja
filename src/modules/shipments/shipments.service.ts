@@ -302,7 +302,12 @@ export class ShipmentsService {
         return this.prismaService.shipment.findMany({
             where: { shipmentDetails: { some: { userId } } },
             include: {
-                shipmentDetails: true,
+                shipmentDetails: {
+                    include: {
+                        user: true,
+                        pickupAddress: true,
+                    },
+                },
                 payments: true,
                 shipmentHistories: true,
             },
@@ -314,7 +319,12 @@ export class ShipmentsService {
         const shipment = await this.prismaService.shipment.findUnique({
             where: { id },
             include: {
-                shipmentDetails: true,
+                shipmentDetails: {
+                    include: {
+                        user: true,
+                        pickupAddress: true,
+                    },
+                },
                 payments: true,
                 shipmentHistories: true,
             },
@@ -387,7 +397,7 @@ export class ShipmentsService {
         } else if (distance <= 100) {
             distancePrice = distanceRate.tier1 + distanceRate.tier2;
         } else {
-            const extraDistance = Math.ceil((distance - 100) / 100);
+            const extraDistance = Math.ceil((distance - 100) / 100); // Setiap 100 km tambahan
             distancePrice =
                 distanceRate.tier3 + extraDistance * distanceRate.tier3;
         }
