@@ -29,6 +29,14 @@ export class ShipmentCourierService {
                     ],
                 },
             },
+            // Tambahkan blok include di bawah ini
+            include: {
+                shipmentDetails: {
+                    include: {
+                        pickupAddress: true, // Pastikan nama relasi di schema.prisma adalah pickup_address
+                    },
+                },
+            },
             orderBy: { createdAt: 'desc' },
         });
     }
